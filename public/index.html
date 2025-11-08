@@ -12,12 +12,9 @@ label {display:block;margin:10px 0 6px}
 input,select {width:100%;padding:10px;border:1px solid #ddd;border-radius:6px}
 button {background:#0070ba;color:#fff;border:none;padding:10px 16px;border-radius:6px;cursor:pointer}
 small.note {color:#666}
-#paymentButtons {display:none;margin-top:16px}
+#paypal-buttons-container {margin-top:20px}
 .team {margin-top:28px;padding:14px;background:#0f1724;color:#fff;border-radius:8px;text-align:center}
-#paypal-container {margin-top:20px;}
 </style>
-<!-- SDK PayPal officiel -->
-<script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=EUR"></script>
 </head>
 <body>
 <header>
@@ -55,27 +52,17 @@ small.note {color:#666}
   <input id="email" type="email" required />
 
   <p>Prix estimé : <strong id="price">0€</strong></p>
-  <button type="button" onclick="validateAndShow()">Valider & Payer</button>
+  <button type="button" id="showPayPalBtn">Valider & Payer</button>
 </form>
 
-<div id="paymentButtons">
-  <h3>Paiement</h3>
-  <div id="paypal-container"></div>
-  <p class="note">
-    Orange : <strong id="orangeNum">+225XXXXXXXX</strong><br/>
-    Wave : <strong id="waveNum">+225XXXXXXXX</strong>
-  </p>
-  <p class="note">
-    Pour Orange/Wave : envoie le montant au numéro ci-dessus puis envoie la preuve sur WhatsApp 📱.
-  </p>
-</div>
-</div>
+<div id="paypal-buttons-container" style="display:none;"></div>
 
 <div class="team">
   <h3>Notre équipe</h3>
   <p>Jean N'guessan — Support</p>
 </div>
 
+<script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=EUR"></script>
 <script>
 const configOptions = [
   "1GO/40%CPU","3GO/100%CPU","4GO/150%CPU","6GO/220%CPU","10GO/300%CPU",
@@ -84,7 +71,7 @@ const configOptions = [
 
 const prices = {
   "Node.js":[1.5,2,2.9,4,6,6.9,7.5,8,8.9,10],
-  "Python":[2,2.5,3,3.5,5,6,7,8,9,12],
+  "Python":[2,2.5,3,3.5,5,6,7,8,9,12]
 };
 prices["Minecraft"] = prices["Python"].map(p => Math.round(p * 1.03 * 100)/100);
 
@@ -105,9 +92,8 @@ function computePrice(){
   const cfg = configSelect.value;
   const duration = parseInt(durationEl.value || '7');
   if (!panel || cfg === '') { priceEl.textContent = '0€'; return 0; }
-  let base = prices[panel][cfg];
-  const multiplier = duration / 7;
-  const total = Math.round(base * multiplier * 100) / 100;
+  const base = prices[panel][cfg];
+  const total = Math.round(base * (duration / 7) * 100) / 100;
   priceEl.textContent = total + '€';
   return total;
 }
@@ -116,59 +102,46 @@ panelEl.addEventListener('change', computePrice);
 configSelect.addEventListener('change', computePrice);
 durationEl.addEventListener('change', computePrice);
 
-function validateAndShow() {
-  const panel = panelEl.value;
-  const cfg = configSelect.value;
-  const duration = durationEl.value;
-  const panelName = document.getElementById('panelName').value;
-  const username = document.getElementById('username').value;
-  const password = document.getElementById('password').value;
-  const email = document.getElementById('email').value;
-  if (!panel || cfg==='' || !panelName || !username || !password || !email) {
-    alert('Remplis tous les champs s\'il te plaît.');
+document.getElementById('showPayPalBtn').addEventListener('click', () => {
+  if (!panelEl.value || configSelect.value === '' || !document.getElementById('panelName').value || !document.getElementById('username').value || !document.getElementById('password').value || !document.getElementById('email').value) {
+    alert("Remplis tous les champs s'il te plaît.");
     return;
   }
 
-  document.getElementById('paymentButtons').style.display = 'block';
+  const container = document.getElementById('paypal-buttons-container');
+  container.style.display = "block";
+  container.innerHTML = ""; // réinitialise si déjà affiché
 
-  fetch('/numbers').then(r=>r.json()).then(data=>{
-    document.getElementById('orangeNum').textContent = data.orange;
-    document.getElementById('waveNum').textContent = data.wave;
-  }).catch(()=>{});
-
-  const price = computePrice();
-  const orderData = {
-    panel,
-    config: configOptions[cfg],
-    duration,
-    panelName,
-    username,
-    password,
-    email,
-    price
-  };
-
-  // Initialise les vrais boutons PayPal
   paypal.Buttons({
-    style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'paypal' },
-    createOrder: async function(data, actions) {
-      const res = await fetch('/create-paypal-order', {
+    createOrder: function(data, actions) {
+      const price = computePrice();
+      const payload = {
+        panel: panelEl.value,
+        config: configOptions[configSelect.value],
+        duration: durationEl.value,
+        panelName: document.getElementById('panelName').value,
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+        email: document.getElementById('email').value,
+        price
+      };
+      return fetch('/create-paypal-order', {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(orderData)
-      });
-      const j = await res.json();
-      if (!j.orderId) throw new Error('Erreur création PayPal');
-      return j.orderId;
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(order => order.id);
     },
     onApprove: function(data, actions) {
-      window.location.href = `/execute-paypal?orderId=${data.orderID}`;
-    },
-    onError: function(err) {
-      alert('Erreur PayPal: ' + err);
+      return fetch(`/execute-paypal?orderId=${data.orderID}`)
+        .then(res => res.text())
+        .then(html => {
+          document.body.innerHTML = html;
+        });
     }
-  }).render('#paypal-container');
-}
+  }).render('#paypal-buttons-container');
+});
 </script>
 </body>
-  </html>
+</html>

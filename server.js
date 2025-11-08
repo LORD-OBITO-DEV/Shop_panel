@@ -174,6 +174,13 @@ Prix: ${order.price} €`,
   }
 });
 
+// WAVE ET ORANGE 🧡 🌊
+app.get('/numbers', (req, res) => {
+  res.json({
+    orange: process.env.ORANGE_NUMBER,
+    wave: process.env.WAVE_NUMBER,
+  });
+});
 // === CRÉATION PANEL PTERODACTYL ===
 async function createPteroPanel(order) {
   const egg = order.panel === "Node.js" ? PTERO_JS_EGG : PTERO_PYTHON_EGG;

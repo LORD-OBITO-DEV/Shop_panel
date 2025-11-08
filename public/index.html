@@ -5,19 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Acheter un Panel Ptérodactyle</title>
 <style>
-body{font-family:Arial, sans-serif; background:#f5f7fb; margin:0}
-header{background:#10121a;color:#fff;padding:18px;text-align:center}
-.container{max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.06)}
-label{display:block;margin:10px 0 6px}
-input,select{width:100%;padding:10px;border:1px solid #ddd;border-radius:6px}
-button{background:#0070ba;color:#fff;border:none;padding:10px 16px;border-radius:6px;cursor:pointer}
-small.note{color:#666}
-#paymentButtons{display:none;margin-top:16px}
-.team{margin-top:28px;padding:14px;background:#0f1724;color:#fff;border-radius:8px;text-align:center}
+body {font-family:Arial, sans-serif; background:#f5f7fb; margin:0}
+header {background:#10121a;color:#fff;padding:18px;text-align:center}
+.container {max-width:900px;margin:20px auto;background:#fff;padding:20px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.06)}
+label {display:block;margin:10px 0 6px}
+input,select {width:100%;padding:10px;border:1px solid #ddd;border-radius:6px}
+button {background:#0070ba;color:#fff;border:none;padding:10px 16px;border-radius:6px;cursor:pointer}
+small.note {color:#666}
+#paymentButtons {display:none;margin-top:16px}
+.team {margin-top:28px;padding:14px;background:#0f1724;color:#fff;border-radius:8px;text-align:center}
+#paypal-container {margin-top:20px;}
 </style>
 </head>
 <body>
-<header><h1>Acheter un Panel Ptérodactyle</h1><p>Automatisation PayPal + Pterodactyl</p></header>
+<header>
+  <h1>Acheter un Panel Ptérodactyle</h1>
+  <p>Automatisation PayPal + Carte + Pterodactyl</p>
+</header>
+
 <div class="container">
 <form id="panelForm">
   <label>Panel</label>
@@ -33,9 +38,9 @@ small.note{color:#666}
 
   <label>Durée</label>
   <select id="duration">
-    <option value="7">7 jours</option>
-    <option value="15">15 jours</option>
-    <option value="30">30 jours</option>
+    <option value="7j">7 jours</option>
+    <option value="15j">15 jours</option>
+    <option value="30j">30 jours</option>
   </select>
 
   <label>Nom du panel</label>
@@ -47,15 +52,22 @@ small.note{color:#666}
   <label>Email</label>
   <input id="email" type="email" required />
 
-  <p>Prix estimé: <strong id="price">0€</strong></p>
+  <p>Prix estimé : <strong id="price">0€</strong></p>
   <button type="button" onclick="validateAndShow()">Valider & Payer</button>
 </form>
 
 <div id="paymentButtons">
   <h3>Paiement</h3>
-  <button id="paypalBtn">Payer avec PayPal</button>
-  <p class="note">Orange: <strong id="orangeNum">+225XXXXXXXX</strong> &mdash; Wave: <strong id="waveNum">+225XXXXXXXX</strong></p>
-  <p class="note">Pour Orange/Wave: envoie l'argent au numéro ci-dessus et envoie la preuve sur WhatsApp. Nous créerons le panel manuellement après confirmation (ou via webhook si intégré).</p>
+  <div id="paypal-container">
+    <button id="paypalBtn">💳 Payer avec PayPal ou Carte</button>
+  </div>
+  <p class="note">
+    Orange : <strong id="orangeNum">+225XXXXXXXX</strong><br/>
+    Wave : <strong id="waveNum">+225XXXXXXXX</strong>
+  </p>
+  <p class="note">
+    Pour Orange/Wave : envoie le montant au numéro ci-dessus puis envoie la preuve sur WhatsApp 📱.
+  </p>
 </div>
 </div>
 
@@ -66,11 +78,13 @@ small.note{color:#666}
 
 <script>
 const configOptions = [
-  "1GO/40%CPU","3GO/100%CPU","4GO/150%CPU","6GO/220%CPU","10GO/300%CPU","20GO/450%CPU","30GO/500%CPU","40GO/550%CPU","50GO/600%CPU","Unlimited/unlimited"
+  "1GO/40%CPU","3GO/100%CPU","4GO/150%CPU","6GO/220%CPU","10GO/300%CPU",
+  "20GO/450%CPU","30GO/500%CPU","40GO/550%CPU","50GO/600%CPU","Unlimited/unlimited"
 ];
+
 const prices = {
   "Node.js":[1.5,2,2.9,4,6,6.9,7.5,8,8.9,10],
-  "Python":[2,2.5,3,3.5,5,6,7,8,9,12]
+  "Python":[2,2.5,3,3.5,5,6,7,8,9,12],
 };
 prices["Minecraft"] = prices["Python"].map(p => Math.round(p * 1.03 * 100)/100);
 
@@ -89,13 +103,10 @@ const priceEl = document.getElementById('price');
 function computePrice(){
   const panel = panelEl.value;
   const cfg = configSelect.value;
-  const duration = parseInt(durationEl.value || '7');
-  if (!panel || cfg === '') {
-    priceEl.textContent = '0€';
-    return 0;
-  }
+  const duration = durationEl.value.replace('j','');
+  if (!panel || cfg === '') { priceEl.textContent = '0€'; return 0; }
   let base = prices[panel][cfg];
-  const multiplier = duration / 7;
+  const multiplier = parseInt(duration) / 7;
   const total = Math.round(base * multiplier * 100) / 100;
   priceEl.textContent = total + '€';
   return total;
@@ -104,7 +115,7 @@ panelEl.addEventListener('change', computePrice);
 configSelect.addEventListener('change', computePrice);
 durationEl.addEventListener('change', computePrice);
 
-function validateAndShow() {
+async function validateAndShow() {
   const panel = panelEl.value;
   const cfg = configSelect.value;
   const duration = durationEl.value;
@@ -116,23 +127,31 @@ function validateAndShow() {
     alert('Remplis tous les champs s\'il te plaît.');
     return;
   }
-  // show payment
+
   document.getElementById('paymentButtons').style.display = 'block';
 
-  // set mobile numbers (from server env? hardcode placeholders)
-  document.getElementById('orangeNum').textContent = (window.ORANGE_NUMBER || '+225XXXXXXXX');
-  document.getElementById('waveNum').textContent = (window.WAVE_NUMBER || '+225XXXXXXXX');
+  // Récupération des numéros (si backend les expose)
+  fetch('/numbers').then(r=>r.json()).then(data=>{
+    document.getElementById('orangeNum').textContent = data.orange;
+    document.getElementById('waveNum').textContent = data.wave;
+  }).catch(()=>{});
 
-  // attach PayPal click
   document.getElementById('paypalBtn').onclick = async function(){
     const price = computePrice();
     const payload = {
-      panel, config: configOptions[cfg], duration, panelName, username, password, email, price
+      panel,
+      config: configOptions[cfg],
+      duration,
+      panelName,
+      username,
+      password,
+      email,
+      price
     };
     try {
       const res = await fetch('/create-paypal-order', {
         method: 'POST',
-        headers: { 'Content-Type':'application/json' },
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify(payload)
       });
       const j = await res.json();
@@ -148,4 +167,4 @@ function validateAndShow() {
 }
 </script>
 </body>
-</html>
+                                  </html>

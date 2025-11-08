@@ -16,6 +16,8 @@ small.note {color:#666}
 .team {margin-top:28px;padding:14px;background:#0f1724;color:#fff;border-radius:8px;text-align:center}
 #paypal-container {margin-top:20px;}
 </style>
+<!-- SDK PayPal officiel -->
+<script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=EUR"></script>
 </head>
 <body>
 <header>
@@ -38,9 +40,9 @@ small.note {color:#666}
 
   <label>Durée</label>
   <select id="duration">
-    <option value="7j">7 jours</option>
-    <option value="15j">15 jours</option>
-    <option value="30j">30 jours</option>
+    <option value="7">7 jours</option>
+    <option value="15">15 jours</option>
+    <option value="30">30 jours</option>
   </select>
 
   <label>Nom du panel</label>
@@ -58,9 +60,7 @@ small.note {color:#666}
 
 <div id="paymentButtons">
   <h3>Paiement</h3>
-  <div id="paypal-container">
-    <button id="paypalBtn">💳 Payer avec PayPal ou Carte</button>
-  </div>
+  <div id="paypal-container"></div>
   <p class="note">
     Orange : <strong id="orangeNum">+225XXXXXXXX</strong><br/>
     Wave : <strong id="waveNum">+225XXXXXXXX</strong>
@@ -103,19 +103,20 @@ const priceEl = document.getElementById('price');
 function computePrice(){
   const panel = panelEl.value;
   const cfg = configSelect.value;
-  const duration = durationEl.value.replace('j','');
+  const duration = parseInt(durationEl.value || '7');
   if (!panel || cfg === '') { priceEl.textContent = '0€'; return 0; }
   let base = prices[panel][cfg];
-  const multiplier = parseInt(duration) / 7;
+  const multiplier = duration / 7;
   const total = Math.round(base * multiplier * 100) / 100;
   priceEl.textContent = total + '€';
   return total;
 }
+
 panelEl.addEventListener('change', computePrice);
 configSelect.addEventListener('change', computePrice);
 durationEl.addEventListener('change', computePrice);
 
-async function validateAndShow() {
+function validateAndShow() {
   const panel = panelEl.value;
   const cfg = configSelect.value;
   const duration = durationEl.value;
@@ -130,41 +131,44 @@ async function validateAndShow() {
 
   document.getElementById('paymentButtons').style.display = 'block';
 
-  // Récupération des numéros (si backend les expose)
   fetch('/numbers').then(r=>r.json()).then(data=>{
     document.getElementById('orangeNum').textContent = data.orange;
     document.getElementById('waveNum').textContent = data.wave;
   }).catch(()=>{});
 
-  document.getElementById('paypalBtn').onclick = async function(){
-    const price = computePrice();
-    const payload = {
-      panel,
-      config: configOptions[cfg],
-      duration,
-      panelName,
-      username,
-      password,
-      email,
-      price
-    };
-    try {
+  const price = computePrice();
+  const orderData = {
+    panel,
+    config: configOptions[cfg],
+    duration,
+    panelName,
+    username,
+    password,
+    email,
+    price
+  };
+
+  // Initialise les vrais boutons PayPal
+  paypal.Buttons({
+    style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'paypal' },
+    createOrder: async function(data, actions) {
       const res = await fetch('/create-paypal-order', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(orderData)
       });
       const j = await res.json();
-      if (j.approvalUrl) {
-        window.location.href = j.approvalUrl;
-      } else {
-        alert('Erreur création paiement: ' + (j.error || JSON.stringify(j)));
-      }
-    } catch (err) {
-      alert('Erreur réseau: ' + err.message);
+      if (!j.orderId) throw new Error('Erreur création PayPal');
+      return j.orderId;
+    },
+    onApprove: function(data, actions) {
+      window.location.href = `/execute-paypal?orderId=${data.orderID}`;
+    },
+    onError: function(err) {
+      alert('Erreur PayPal: ' + err);
     }
-  };
+  }).render('#paypal-container');
 }
 </script>
 </body>
-                                  </html>
+  </html>
